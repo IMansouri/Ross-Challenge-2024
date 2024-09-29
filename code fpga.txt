@@ -1,0 +1,160 @@
+/****************************************************************************
+FILENAME     :  video_uut.sv
+PROJECT      :  Hack the Hill 2024
+****************************************************************************/
+
+/*  INSTANTIATION TEMPLATE  -------------------------------------------------
+
+video_uut video_uut (       
+    .clk_i          ( ),//               
+    .cen_i          ( ),//
+    .vid_sel_i      ( ),//
+    .vdat_bars_i    ( ),//[19:0]
+    .vdat_colour_i  ( ),//[19:0]
+    .fvht_i         ( ),//[ 3:0]
+    .fvht_o         ( ),//[ 3:0]
+    .video_o        ( ) //[19:0]
+);
+
+-------------------------------------------------------------------------- */
+
+
+module video_uut (
+    input  wire         clk_i           ,// clock
+    input  wire         cen_i           ,// clock enable
+    input  wire         vid_sel_i       ,// select source video
+    input  wire [19:0]  vdat_bars_i     ,// input video {luma, chroma}
+    input  wire [19:0]  vdat_colour_i   ,// input video {luma, chroma}
+    input  wire [3:0]   fvht_i          ,// input video timing signals
+    output wire [3:0]   fvht_o          ,// 1 clk pulse after falling edge on input signal
+    output wire [19:0]  video_o          // 1 clk pulse after any edge on input signal
+); 
+
+reg [19:0]  vid_d1;
+reg [3:0]   fvht_d1;
+reg [19:0] test_sig;
+
+integer x = 0;
+integer y = 0;
+
+bit blanking = 0;
+
+// temp - might be a signal for this
+//parameter ver_lines = 1125;
+
+parameter A = 10'h3fa;
+parameter B = 10'h0c4;
+assign test_sig = {A, B};
+
+//white
+parameter Y_white = 10'h2d1;
+parameter CB_white = 10'h200;
+parameter CR_white = 10'h200;
+
+//yellow
+parameter Y_yellow = 10'h2a2;
+parameter CB_yellow = 10'h21f;
+parameter CR_yellow = 10'h060;
+
+//cyan
+parameter Y_cyan = 10'h245;
+parameter CB_cyan = 10'h0b0;
+parameter CR_cyan = 10'h24d;
+
+//green
+parameter Y_green = 10'h216;
+parameter CB_green = 10'h0cf;
+parameter CR_green = 10'h0fd;
+
+//purple
+parameter Y_purple = 10'h0fb;
+parameter CB_purple = 10'h331;
+parameter CR_purple = 10'h303;
+
+//red
+parameter Y_red = 10'h0cc;
+parameter CB_red = 10'h350;
+parameter CR_red = 10'h1b3;
+
+//blue
+parameter Y_blue = 10'h06f;
+parameter CB_blue = 10'he1;
+parameter CR_blue = 10'h350;
+
+//binary value to know if we are incrementing or decrementing
+bit inc = 1;
+
+//shape - x ranges
+integer shape_xMin = 750;
+integer shape_xMax = 1000;
+
+
+
+bit flip = 1;
+
+wire HSync = fvht_i[1];
+wire VSync = fvht_i[2];
+
+
+reg vTest = 0;
+bit HSync_prev = 0;
+
+always @(posedge clk_i) begin
+		
+	if(cen_i) begin
+	   
+		//check if blanking and set coordinate system to (0,0)
+		//reset
+		if((VSync | HSync)) begin
+			blanking <= 1; //set blanking to 1 (true)
+		end else begin
+			blanking <= 0; //set blanking to 0 (false)
+		end
+		if (!VSync) begin
+			y <= 0; //new frame 
+			
+			if(x == 1919) begin
+				inc = 0;
+			end else if(x == 0) begin
+				inc = 1;
+			end
+			
+			if(inc) begin
+				shape_xMin = shape_xMin + 1;
+				shape_xMax = shape_xMax + 1;
+			end else begin
+				shape_xMin = shape_xMin - 1;
+				shape_xMax = shape_xMax - 1;
+			end
+			
+			
+		end
+		if (!HSync) begin
+			x <= 0;
+		end
+		if (!vTest && HSync) begin //check if previous hsync is 1 
+			y <= y + 1;
+			vTest = HSync;
+		end
+		
+		//add box 
+		if(!blanking) begin 
+			if((x < shape_xMax) && (x > shape_xMin)) begin 
+				vid_d1 <= (vid_sel_i) ? {Y_blue, CB_blue} : {Y_blue, CR_blue};
+			end else begin 
+				vid_d1 <= (vid_sel_i) ? {Y_red, CB_red} : {Y_red, CR_red};
+			end
+			x <= x + 1;		
+		end
+		 
+       fvht_d1 <= fvht_i;
+		 HSync_prev <= HSync;
+    end
+end
+
+// OUTPUT
+assign fvht_o  = fvht_d1;
+assign video_o = vid_d1;
+
+endmodule
+
